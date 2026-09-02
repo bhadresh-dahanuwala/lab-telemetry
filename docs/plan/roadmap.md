@@ -5,8 +5,8 @@ This document outlines the step-by-step implementation plan for the telemetry da
 ## Phase 1: Foundation & State Management
 **Goal:** Establish the foundational Azure resources required to manage Infrastructure as Code (IaC) state.
 *   [x] Write Bicep template for the core Azure Resource Group (Completed).
-*   [ ] Write Bicep template for an Azure Storage Account and Blob Container.
-*   [ ] Configure Terraform remote backend (`backend "azurerm"`) to point to the newly created Storage Account.
+*   [x] Write Bicep template for an Azure Storage Account and Blob Container.
+*   [x] Configure Terraform remote backend (`backend "azurerm"`) to point to the newly created Storage Account.
 *   *(Note: GitHub OIDC authentication is already configured)*
 
 ## Phase 2: Core Azure Infrastructure (Bicep)
