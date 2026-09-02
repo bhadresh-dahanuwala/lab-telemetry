@@ -11,10 +11,10 @@ This document outlines the step-by-step implementation plan for the telemetry da
 
 ## Phase 2: Core Azure Infrastructure (Bicep)
 **Goal:** Provision the data ingestion and routing layer in Azure.
-*   [ ] **Azure Data Lake Storage (ADLS v2):** Create the storage account with hierarchical namespace enabled to store raw incoming JSON data (Bronze layer).
-*   [ ] **Azure Event Hub:** Provision the Event Hub namespace and topic(s) for streaming data to downstream consumers.
-*   [ ] **Function Hosting:** Provision the Azure Functions App (compute resource) and its associated Storage Account.
-*   [ ] Configure Managed Identities / Role-Based Access Control (RBAC) so the API can securely write to ADLS v2 and Event Hub.
+*   [x] **Azure Data Lake Storage (ADLS v2):** Create the storage account with hierarchical namespace enabled to store raw incoming JSON data (Bronze layer).
+*   [x] **Azure Event Hub:** Provision the Event Hub namespace and topic(s) for streaming data to downstream consumers.
+*   [x] **Function Hosting:** Provision the Azure Functions App (compute resource) and its associated Storage Account.
+*   [x] Configure Managed Identities / Role-Based Access Control (RBAC) so the API can securely write to ADLS v2 and Event Hub.
 
 ## Phase 3: Analytics Infrastructure (Terraform)
 **Goal:** Provision the downstream data platforms to consume the Event Hub streams.

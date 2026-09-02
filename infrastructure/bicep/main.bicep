@@ -1,0 +1,208 @@
+@description('The location for all resources.')
+param location string = resourceGroup().location
+
+@description('A unique suffix to append to resource names to ensure global uniqueness.')
+param uniqueSuffix string = uniqueString(resourceGroup().id)
+
+@description('The name of the environment (e.g., dev, test, prod)')
+@allowed([
+  'dev'
+  'test'
+  'prod'
+])
+param env string
+
+// ==========================================
+// 1. ADLS Gen2 (Data Lake)
+// ==========================================
+var dataLakeName = 'dls${env}${uniqueSuffix}'
+var bronzeContainerName = 'telemetry-bronze'
+
+resource dataLake 'Microsoft.Storage/storageAccounts@2023-01-01' = {
+  name: dataLakeName
+  location: location
+  sku: {
+    name: 'Standard_LRS'
+  }
+  kind: 'StorageV2'
+  properties: {
+    isHnsEnabled: true // This is what makes it ADLS Gen2
+    accessTier: 'Hot'
+    minimumTlsVersion: 'TLS1_2'
+  }
+}
+
+resource dataLakeBlobServices 'Microsoft.Storage/storageAccounts/blobServices@2023-01-01' = {
+  parent: dataLake
+  name: 'default'
+}
+
+resource bronzeContainer 'Microsoft.Storage/storageAccounts/blobServices/containers@2023-01-01' = {
+  parent: dataLakeBlobServices
+  name: bronzeContainerName
+}
+
+// ==========================================
+// 2. Event Hub
+// ==========================================
+var eventHubNamespaceName = 'evhns-${env}-${uniqueSuffix}'
+var eventHubName = 'telemetry-events'
+
+resource eventHubNamespace 'Microsoft.EventHub/namespaces@2024-01-01' = {
+  name: eventHubNamespaceName
+  location: location
+  sku: {
+    name: 'Standard'
+    tier: 'Standard'
+    capacity: 1
+  }
+}
+
+resource eventHub 'Microsoft.EventHub/namespaces/eventhubs@2024-01-01' = {
+  parent: eventHubNamespace
+  name: eventHubName
+  properties: {
+    messageRetentionInDays: 7
+    partitionCount: 4
+  }
+}
+
+// ==========================================
+// 3. Azure Function App (Compute)
+// ==========================================
+var funcStorageName = 'stfunc${env}${uniqueSuffix}'
+var appServicePlanName = 'asp-func-${env}-${uniqueSuffix}'
+var functionAppName = 'func-telemetry-${env}-${uniqueSuffix}'
+var logAnalyticsWorkspaceName = 'law-telemetry-${env}-${uniqueSuffix}'
+var appInsightsName = 'appi-telemetry-${env}-${uniqueSuffix}'
+
+// Functions need their own standard storage account to manage triggers/state
+resource functionStorage 'Microsoft.Storage/storageAccounts@2023-01-01' = {
+  name: funcStorageName
+  location: location
+  sku: {
+    name: 'Standard_LRS'
+  }
+  kind: 'StorageV2'
+}
+
+// Log Analytics & App Insights for Function logging
+resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2023-09-01' = {
+  name: logAnalyticsWorkspaceName
+  location: location
+  properties: {
+    sku: {
+      name: 'PerGB2018'
+    }
+  }
+}
+
+resource appInsights 'Microsoft.Insights/components@2020-02-02' = {
+  name: appInsightsName
+  location: location
+  kind: 'web'
+  properties: {
+    Application_Type: 'web'
+    WorkspaceResourceId: logAnalyticsWorkspace.id
+  }
+}
+
+// Serverless Consumption Plan
+resource appServicePlan 'Microsoft.Web/serverfarms@2023-12-01' = {
+  name: appServicePlanName
+  location: location
+  sku: {
+    name: 'Y1'
+    tier: 'Dynamic'
+  }
+  properties: {
+    reserved: true // Required for Linux
+  }
+}
+
+// The Function App itself
+resource functionApp 'Microsoft.Web/sites@2023-12-01' = {
+  name: functionAppName
+  location: location
+  kind: 'functionapp,linux'
+  identity: {
+    type: 'SystemAssigned' // Generates the Managed Identity
+  }
+  properties: {
+    serverFarmId: appServicePlan.id
+    siteConfig: {
+      linuxFxVersion: 'python|3.11'
+      appSettings: [
+        {
+          name: 'AzureWebJobsStorage'
+          value: 'DefaultEndpointsProtocol=https;AccountName=${functionStorage.name};EndpointSuffix=${environment().suffixes.storage};AccountKey=${functionStorage.listKeys().keys[0].value}'
+        }
+        {
+          name: 'WEBSITE_CONTENTAZUREFILECONNECTIONSTRING'
+          value: 'DefaultEndpointsProtocol=https;AccountName=${functionStorage.name};EndpointSuffix=${environment().suffixes.storage};AccountKey=${functionStorage.listKeys().keys[0].value}'
+        }
+        {
+          name: 'WEBSITE_CONTENTSHARE'
+          value: toLower(functionAppName)
+        }
+        {
+          name: 'FUNCTIONS_EXTENSION_VERSION'
+          value: '~4'
+        }
+        {
+          name: 'FUNCTIONS_WORKER_RUNTIME'
+          value: 'python'
+        }
+        {
+          name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
+          value: appInsights.properties.ConnectionString
+        }
+        // These will be used by our Python code later to authenticate via Managed Identity
+        {
+          name: 'DATALAKE_ACCOUNT_URL'
+          value: dataLake.properties.primaryEndpoints.dfs
+        }
+        {
+          name: 'EVENTHUB_NAMESPACE_FQDN'
+          value: '${eventHubNamespace.name}.servicebus.windows.net'
+        }
+        {
+          name: 'EVENTHUB_NAME'
+          value: eventHub.name
+        }
+      ]
+    }
+  }
+}
+
+// ==========================================
+// 4. Role Assignments (RBAC)
+// ==========================================
+
+// Built-in Role ID for "Storage Blob Data Contributor"
+var storageBlobDataContributorRoleId = subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'ba92f5b4-2d11-453d-a403-e96b0029c9fe')
+
+// Built-in Role ID for "Azure Event Hubs Data Sender"
+var eventHubsDataSenderRoleId = subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '2b629674-e913-4c01-ae53-ef4638d8f975')
+
+// Grant the Function App permission to write to the Data Lake
+resource functionDataLakeAccess 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(dataLake.id, functionApp.id, storageBlobDataContributorRoleId)
+  scope: dataLake
+  properties: {
+    roleDefinitionId: storageBlobDataContributorRoleId
+    principalId: functionApp.identity.principalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
+// Grant the Function App permission to write to the Event Hub
+resource functionEventHubAccess 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(eventHubNamespace.id, functionApp.id, eventHubsDataSenderRoleId)
+  scope: eventHubNamespace
+  properties: {
+    roleDefinitionId: eventHubsDataSenderRoleId
+    principalId: functionApp.identity.principalId
+    principalType: 'ServicePrincipal'
+  }
+}
