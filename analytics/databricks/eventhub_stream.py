@@ -16,8 +16,15 @@ EVENT_HUB_NAMESPACE = "evhns-dev-ozjr7qenbbjhm"
 EVENT_HUB_NAME = "telemetry-events"
 
 # For a PoC, you can paste the RootManageSharedAccessKey connection string here.
-# In production, ALWAYS use Databricks Secrets: dbutils.secrets.get(scope="my-scope", key="eh-conn-str")
 CONNECTION_STRING = "<PASTE_YOUR_EVENT_HUB_CONNECTION_STRING_HERE>"
+
+# Azure Data Lake Storage (ADLS) Configuration for Checkpointing (The "Right Way")
+STORAGE_ACCOUNT_NAME = "dlsdevozjr7qenbbjhm" # Replace if different
+STORAGE_ACCOUNT_KEY = "<PASTE_STORAGE_ACCOUNT_KEY_HERE>"
+CONTAINER_NAME = "telemetry-bronze"
+
+# Configure Spark to authenticate with ADLS Gen2
+spark.conf.set(f"fs.azure.account.key.{STORAGE_ACCOUNT_NAME}.dfs.core.windows.net", STORAGE_ACCOUNT_KEY)
 
 # Kafka SASL configuration string
 EH_SASL = f'kafkashaded.org.apache.kafka.common.security.plain.PlainLoginModule required username="$ConnectionString" password="{CONNECTION_STRING}";'
@@ -71,16 +78,14 @@ parsed_stream_df = raw_stream_df \
 # ==========================================
 # 4. View or Save the Stream
 # ==========================================
-# For testing the PoC, we will just display the live stream in the notebook.
-# Send a few more POST requests from your terminal and watch them appear here in real-time!
+# The "Right Way": Store checkpoints safely in your Azure Data Lake!
+checkpoint_path = f"abfss://{CONTAINER_NAME}@{STORAGE_ACCOUNT_NAME}.dfs.core.windows.net/checkpoints/telemetry_display"
 
-# Note: Modern Databricks workspaces require explicit checkpoint locations even for display()
-# We use 'file:/tmp/...' to store the checkpoint on the cluster's local disk, bypassing DBFS root restrictions.
-display(parsed_stream_df, checkpointLocation="file:/tmp/checkpoints/telemetry_display")
+display(parsed_stream_df, checkpointLocation=checkpoint_path)
 
 # To save the stream permanently as a Delta Table, uncomment this block:
 # parsed_stream_df.writeStream \
 #   .format("delta") \
 #   .outputMode("append") \
-#   .option("checkpointLocation", "/tmp/checkpoints/telemetry_silver") \
+#   .option("checkpointLocation", f"abfss://{CONTAINER_NAME}@{STORAGE_ACCOUNT_NAME}.dfs.core.windows.net/checkpoints/telemetry_silver") \
 #   .table("telemetry_silver")
