@@ -56,6 +56,9 @@ resource eventHubNamespace 'Microsoft.EventHub/namespaces@2024-01-01' = {
     tier: 'Standard'
     capacity: 1
   }
+  identity: {
+    type: 'SystemAssigned'
+  }
 }
 
 resource eventHub 'Microsoft.EventHub/namespaces/eventhubs@2024-01-01' = {
@@ -64,6 +67,21 @@ resource eventHub 'Microsoft.EventHub/namespaces/eventhubs@2024-01-01' = {
   properties: {
     messageRetentionInDays: 7
     partitionCount: 4
+    captureDescription: {
+      enabled: true
+      skipEmptyArchives: true
+      encoding: 'Avro'
+      intervalInSeconds: 60
+      sizeLimitInBytes: 10485760 // 10 MB
+      destination: {
+        name: 'EventHubArchive.AzureBlockBlob'
+        properties: {
+          storageAccountResourceId: dataLake.id
+          blobContainer: bronzeContainerName
+          archiveNameFormat: '{Namespace}/{EventHub}/{PartitionId}/{Year}/{Month}/{Day}/{Hour}/{Minute}/{Second}'
+        }
+      }
+    }
   }
 }
 
@@ -204,5 +222,62 @@ resource functionEventHubAccess 'Microsoft.Authorization/roleAssignments@2022-04
     roleDefinitionId: eventHubsDataSenderRoleId
     principalId: functionApp.identity.principalId
     principalType: 'ServicePrincipal'
+  }
+}
+
+// Grant Event Hub permission to write Capture files to the Data Lake
+resource eventHubDataLakeAccess 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(dataLake.id, eventHubNamespace.id, storageBlobDataContributorRoleId)
+  scope: dataLake
+  properties: {
+    roleDefinitionId: storageBlobDataContributorRoleId
+    principalId: eventHubNamespace.identity.principalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
+// ==========================================
+// 5. Snowpipe Infrastructure (Queue & Event Grid)
+// ==========================================
+var snowpipeQueueName = 'snowpipe-queue'
+
+resource storageQueueServices 'Microsoft.Storage/storageAccounts/queueServices@2023-01-01' = {
+  parent: dataLake
+  name: 'default'
+}
+
+resource snowpipeQueue 'Microsoft.Storage/storageAccounts/queueServices/queues@2023-01-01' = {
+  parent: storageQueueServices
+  name: snowpipeQueueName
+}
+
+// System Topic for the Data Lake
+resource dataLakeSystemTopic 'Microsoft.EventGrid/systemTopics@2023-12-15-preview' = {
+  name: 'st-telemetry-bronze'
+  location: location
+  properties: {
+    source: dataLake.id
+    topicType: 'Microsoft.Storage.StorageAccounts'
+  }
+}
+
+// Event Grid Subscription routing to the Queue
+resource snowpipeEventSubscription 'Microsoft.EventGrid/systemTopics/eventSubscriptions@2023-12-15-preview' = {
+  parent: dataLakeSystemTopic
+  name: 'snowpipe-sub'
+  properties: {
+    destination: {
+      endpointType: 'StorageQueue'
+      properties: {
+        resourceId: dataLake.id
+        queueName: snowpipeQueueName
+      }
+    }
+    filter: {
+      includedEventTypes: [
+        'Microsoft.Storage.BlobCreated'
+      ]
+      subjectBeginsWith: '/blobServices/default/containers/${bronzeContainerName}/'
+    }
   }
 }

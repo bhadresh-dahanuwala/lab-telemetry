@@ -57,3 +57,53 @@ resource "snowflake_warehouse" "telemetry_wh" {
   min_cluster_count = 1
   max_cluster_count = 1
 }
+
+# ==========================================
+# Data Sources for Identity
+# ==========================================
+data "azurerm_client_config" "current" {}
+
+# ==========================================
+# Snowflake Auto-Ingest (Snowpipe)
+# ==========================================
+
+# 1. Storage Integration connecting Snowflake to Azure Data Lake
+resource "snowflake_storage_integration" "azure_integration" {
+  name    = "AZURE_TELEMETRY_INTEGRATION"
+  comment = "Integration with Azure Data Lake for Telemetry"
+  type    = "EXTERNAL_STAGE"
+  
+  enabled = true
+  storage_provider = "AZURE"
+  
+  azure_tenant_id  = data.azurerm_client_config.current.tenant_id
+  
+  # In Phase 5 (CI/CD), we will pass the exact Bicep storage account name as a variable.
+  # For now, we allow the known container path.
+  storage_allowed_locations = [
+    "azure://*/telemetry-bronze/"
+  ]
+}
+
+# 2. Stage pointing to the Storage Integration
+resource "snowflake_stage" "telemetry_stage" {
+  name        = "TELEMETRY_AZURE_STAGE"
+  database    = snowflake_database.telemetry_db.name
+  schema      = snowflake_schema.telemetry_schema.name
+  
+  url         = "azure://*/telemetry-bronze/"
+  storage_integration = snowflake_storage_integration.azure_integration.name
+}
+
+# 3. The Pipe (Snowpipe) with auto_ingest enabled
+resource "snowflake_pipe" "telemetry_pipe" {
+  database = snowflake_database.telemetry_db.name
+  schema   = snowflake_schema.telemetry_schema.name
+  name     = "TELEMETRY_PIPE"
+  
+  comment  = "Auto-ingest pipe for Telemetry JSON files"
+  
+  auto_ingest = true
+  
+  copy_statement = "COPY INTO ${snowflake_database.telemetry_db.name}.${snowflake_schema.telemetry_schema.name}.RAW_JSON_TABLE FROM @${snowflake_stage.telemetry_stage.name} FILE_FORMAT = (TYPE = JSON)"
+}
