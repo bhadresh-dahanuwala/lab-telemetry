@@ -1,5 +1,5 @@
 @description('The location for all resources.')
-param location string = resourceGroup().location
+param location string = 'eastus'
 
 @description('A unique suffix to append to resource names to ensure global uniqueness.')
 param uniqueSuffix string = uniqueString(resourceGroup().id)
@@ -11,6 +11,9 @@ param uniqueSuffix string = uniqueString(resourceGroup().id)
   'prod'
 ])
 param env string
+
+@description('Location specifically for the Function App to bypass regional quota limits.')
+param functionLocation string = 'eastus'
 
 // ==========================================
 // 1. ADLS Gen2 (Data Lake)
