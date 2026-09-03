@@ -18,8 +18,8 @@ This document outlines the step-by-step implementation plan for the telemetry da
 
 ## Phase 3: Analytics Infrastructure (Terraform)
 **Goal:** Provision the downstream data platforms to consume the Event Hub streams.
-*   [ ] **Databricks:** Write Terraform code to provision the Databricks Workspace.
-*   [ ] **Snowflake:** Write Terraform code to provision Snowflake resources (Databases, Schemas, Warehouses).
+*   [x] **Databricks:** Write Terraform code to provision the Databricks Workspace.
+*   [x] **Snowflake:** Write Terraform code to provision Snowflake resources (Databases, Schemas, Warehouses).
 *   [ ] Set up integration points (e.g., configuring Databricks and Snowflake to ingest from the Azure Event Hub).
 
 ## Phase 4: Azure Function Development
