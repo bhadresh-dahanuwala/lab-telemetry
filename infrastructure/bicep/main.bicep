@@ -1,5 +1,5 @@
 @description('The location for all resources.')
-param location string = resourceGroup().location
+param location string = 'eastus'
 
 @description('A unique suffix to append to resource names to ensure global uniqueness.')
 param uniqueSuffix string = uniqueString(resourceGroup().id)
@@ -11,6 +11,9 @@ param uniqueSuffix string = uniqueString(resourceGroup().id)
   'prod'
 ])
 param env string
+
+@description('Location specifically for the Function App to bypass regional quota limits.')
+param functionLocation string = 'eastus'
 
 // ==========================================
 // 1. ADLS Gen2 (Data Lake)
@@ -104,6 +107,16 @@ resource functionStorage 'Microsoft.Storage/storageAccounts@2023-01-01' = {
   kind: 'StorageV2'
 }
 
+resource functionStorageBlob 'Microsoft.Storage/storageAccounts/blobServices@2023-01-01' = {
+  parent: functionStorage
+  name: 'default'
+}
+
+resource deploymentContainer 'Microsoft.Storage/storageAccounts/blobServices/containers@2023-01-01' = {
+  parent: functionStorageBlob
+  name: 'deploymentpackage'
+}
+
 // Log Analytics & App Insights for Function logging
 resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2023-09-01' = {
   name: logAnalyticsWorkspaceName
@@ -130,8 +143,8 @@ resource appServicePlan 'Microsoft.Web/serverfarms@2023-12-01' = {
   name: appServicePlanName
   location: location
   sku: {
-    name: 'Y1'
-    tier: 'Dynamic'
+    name: 'FC1'
+    tier: 'FlexConsumption'
   }
   properties: {
     reserved: true // Required for Linux
@@ -149,33 +162,15 @@ resource functionApp 'Microsoft.Web/sites@2023-12-01' = {
   properties: {
     serverFarmId: appServicePlan.id
     siteConfig: {
-      linuxFxVersion: 'python|3.11'
       appSettings: [
         {
           name: 'AzureWebJobsStorage'
           value: 'DefaultEndpointsProtocol=https;AccountName=${functionStorage.name};EndpointSuffix=${environment().suffixes.storage};AccountKey=${functionStorage.listKeys().keys[0].value}'
         }
         {
-          name: 'WEBSITE_CONTENTAZUREFILECONNECTIONSTRING'
-          value: 'DefaultEndpointsProtocol=https;AccountName=${functionStorage.name};EndpointSuffix=${environment().suffixes.storage};AccountKey=${functionStorage.listKeys().keys[0].value}'
-        }
-        {
-          name: 'WEBSITE_CONTENTSHARE'
-          value: toLower(functionAppName)
-        }
-        {
-          name: 'FUNCTIONS_EXTENSION_VERSION'
-          value: '~4'
-        }
-        {
-          name: 'FUNCTIONS_WORKER_RUNTIME'
-          value: 'python'
-        }
-        {
           name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
           value: appInsights.properties.ConnectionString
         }
-        // These will be used by our Python code later to authenticate via Managed Identity
         {
           name: 'DATALAKE_ACCOUNT_URL'
           value: dataLake.properties.primaryEndpoints.dfs
@@ -189,6 +184,25 @@ resource functionApp 'Microsoft.Web/sites@2023-12-01' = {
           value: eventHub.name
         }
       ]
+      functionAppConfig: {
+        deployment: {
+          storage: {
+            type: 'blobContainer'
+            value: '${functionStorage.properties.primaryEndpoints.blob}deploymentpackage'
+            authentication: {
+              type: 'SystemAssignedIdentity'
+            }
+          }
+        }
+        scaleAndConcurrency: {
+          maximumInstanceCount: 40
+          instanceMemoryMB: 2048
+        }
+        runtime: {
+          name: 'python'
+          version: '3.11'
+        }
+      }
     }
   }
 }
@@ -196,6 +210,19 @@ resource functionApp 'Microsoft.Web/sites@2023-12-01' = {
 // ==========================================
 // 4. Role Assignments (RBAC)
 // ==========================================
+
+
+
+// Grant the Function App permission to read/write its own deployment storage account (required for Flex Consumption)
+resource functionStorageAccess 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(functionStorage.id, functionApp.id, storageBlobDataContributorRoleId)
+  scope: functionStorage
+  properties: {
+    roleDefinitionId: storageBlobDataContributorRoleId
+    principalId: functionApp.identity.principalId
+    principalType: 'ServicePrincipal'
+  }
+}
 
 // Built-in Role ID for "Storage Blob Data Contributor"
 var storageBlobDataContributorRoleId = subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'ba92f5b4-2d11-453d-a403-e96b0029c9fe')
