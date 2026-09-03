@@ -11,17 +11,21 @@ from pyspark.sql.types import StructType, StructField, StringType, DoubleType
 # ==========================================
 # 1. Configuration
 # ==========================================
-# IMPORTANT: Replace these with your actual values from the Azure Portal
+import os
+
+# IMPORTANT: Replace these with your actual names from the Azure Portal
 EVENT_HUB_NAMESPACE = "evhns-dev-ozjr7qenbbjhm"
 EVENT_HUB_NAME = "telemetry-events"
-
-# For a PoC, you can paste the RootManageSharedAccessKey connection string here.
-CONNECTION_STRING = "<PASTE_YOUR_EVENT_HUB_CONNECTION_STRING_HERE>"
-
-# Azure Data Lake Storage (ADLS) Configuration for Checkpointing (The "Right Way")
-STORAGE_ACCOUNT_NAME = "dlsdevozjr7qenbbjhm" # Replace if different
-STORAGE_ACCOUNT_KEY = "<PASTE_STORAGE_ACCOUNT_KEY_HERE>"
+STORAGE_ACCOUNT_NAME = "dlsdevozjr7qenbbjhm" 
 CONTAINER_NAME = "telemetry-bronze"
+
+# Read secrets securely from Cluster Environment Variables
+# (Configure these in your Databricks Cluster -> Advanced Options -> Environment Variables)
+CONNECTION_STRING = os.environ.get("EVENT_HUB_CONN_STR", "")
+STORAGE_ACCOUNT_KEY = os.environ.get("STORAGE_ACCOUNT_KEY", "")
+
+if not CONNECTION_STRING or not STORAGE_ACCOUNT_KEY:
+    raise ValueError("Missing secrets! Please add EVENT_HUB_CONN_STR and STORAGE_ACCOUNT_KEY to your cluster environment variables.")
 
 # Configure Spark to authenticate with ADLS Gen2
 spark.conf.set(f"fs.azure.account.key.{STORAGE_ACCOUNT_NAME}.dfs.core.windows.net", STORAGE_ACCOUNT_KEY)
