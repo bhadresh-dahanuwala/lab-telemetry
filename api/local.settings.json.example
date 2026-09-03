@@ -1,0 +1,9 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "FUNCTIONS_WORKER_RUNTIME": "python",
+    "EVENTHUB_NAMESPACE_FQDN": "your-namespace.servicebus.windows.net",
+    "EVENTHUB_NAME": "telemetry-events"
+  }
+}

@@ -24,10 +24,10 @@ This document outlines the step-by-step implementation plan for the telemetry da
 
 ## Phase 4: Azure Function Development
 **Goal:** Build the serverless application that receives telemetry data from users.
-*   [ ] Initialize the Azure Functions project (Python).
-*   [ ] Implement the POST endpoint to receive JSON telemetry payloads.
-*   [ ] Implement logic to save the raw JSON to ADLS v2.
-*   [ ] Implement logic to publish the JSON message to Azure Event Hub.
+*   [x] Initialize the Azure Functions project (Python).
+*   [x] Implement the POST endpoint to receive JSON telemetry payloads.
+*   [x] Implement logic to save the raw JSON to ADLS v2 *(Handled automatically by Event Hub Capture in Phase 2)*.
+*   [x] Implement logic to publish the JSON message to Azure Event Hub.
 *   [ ] Add unit tests and configuration management.
 
 ## Phase 5: CI/CD Pipeline (GitHub Actions)
