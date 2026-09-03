@@ -17,13 +17,18 @@ EVENT_HUB_NAME = "telemetry-events"
 STORAGE_ACCOUNT_NAME = "dlsdevozjr7qenbbjhm" 
 CONTAINER_NAME = "telemetry-bronze"
 
-# On Serverless Compute, Environment Variables are disabled.
-# The native, secure way is to use Databricks Secrets (backed by Azure Key Vault).
-try:
-    CONNECTION_STRING = dbutils.secrets.get(scope="azure-kv", key="EVENT-HUB-CONN-STR")
-    STORAGE_ACCOUNT_KEY = dbutils.secrets.get(scope="azure-kv", key="STORAGE-ACCOUNT-KEY")
-except Exception as e:
-    raise ValueError(f"Failed to fetch secrets. Did you create the secret scope? Error: {e}")
+# For Databricks Community Edition, the easiest way to avoid hardcoding secrets
+# in your source code is to use Databricks Widgets. This will create text boxes
+# at the top of your notebook where you can paste your keys at runtime!
+dbutils.widgets.text("1_EVENT_HUB_CONN_STR", "")
+dbutils.widgets.text("2_STORAGE_ACCOUNT_KEY", "")
+
+CONNECTION_STRING = dbutils.widgets.get("1_EVENT_HUB_CONN_STR")
+STORAGE_ACCOUNT_KEY = dbutils.widgets.get("2_STORAGE_ACCOUNT_KEY")
+
+if not CONNECTION_STRING or not STORAGE_ACCOUNT_KEY:
+    print("⚠️ PLEASE PASTE YOUR SECRETS INTO THE TEXT BOXES AT THE TOP OF THE SCREEN AND RE-RUN! ⚠️")
+    dbutils.notebook.exit("Missing secrets")
 
 # Configure Spark to authenticate with ADLS Gen2
 spark.conf.set(f"fs.azure.account.key.{STORAGE_ACCOUNT_NAME}.dfs.core.windows.net", STORAGE_ACCOUNT_KEY)
