@@ -11,21 +11,19 @@ from pyspark.sql.types import StructType, StructField, StringType, DoubleType
 # ==========================================
 # 1. Configuration
 # ==========================================
-import os
-
 # IMPORTANT: Replace these with your actual names from the Azure Portal
 EVENT_HUB_NAMESPACE = "evhns-dev-ozjr7qenbbjhm"
 EVENT_HUB_NAME = "telemetry-events"
 STORAGE_ACCOUNT_NAME = "dlsdevozjr7qenbbjhm" 
 CONTAINER_NAME = "telemetry-bronze"
 
-# Read secrets securely from Cluster Environment Variables
-# (Configure these in your Databricks Cluster -> Advanced Options -> Environment Variables)
-CONNECTION_STRING = os.environ.get("EVENT_HUB_CONN_STR", "")
-STORAGE_ACCOUNT_KEY = os.environ.get("STORAGE_ACCOUNT_KEY", "")
-
-if not CONNECTION_STRING or not STORAGE_ACCOUNT_KEY:
-    raise ValueError("Missing secrets! Please add EVENT_HUB_CONN_STR and STORAGE_ACCOUNT_KEY to your cluster environment variables.")
+# On Serverless Compute, Environment Variables are disabled.
+# The native, secure way is to use Databricks Secrets (backed by Azure Key Vault).
+try:
+    CONNECTION_STRING = dbutils.secrets.get(scope="azure-kv", key="EVENT-HUB-CONN-STR")
+    STORAGE_ACCOUNT_KEY = dbutils.secrets.get(scope="azure-kv", key="STORAGE-ACCOUNT-KEY")
+except Exception as e:
+    raise ValueError(f"Failed to fetch secrets. Did you create the secret scope? Error: {e}")
 
 # Configure Spark to authenticate with ADLS Gen2
 spark.conf.set(f"fs.azure.account.key.{STORAGE_ACCOUNT_NAME}.dfs.core.windows.net", STORAGE_ACCOUNT_KEY)
