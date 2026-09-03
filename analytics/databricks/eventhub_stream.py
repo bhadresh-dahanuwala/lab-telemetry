@@ -74,7 +74,8 @@ parsed_stream_df = raw_stream_df \
 # For testing the PoC, we will just display the live stream in the notebook.
 # Send a few more POST requests from your terminal and watch them appear here in real-time!
 
-display(parsed_stream_df)
+# Note: Modern Databricks workspaces require explicit checkpoint locations even for display()
+display(parsed_stream_df, checkpointLocation="/tmp/checkpoints/telemetry_display")
 
 # To save the stream permanently as a Delta Table, uncomment this block:
 # parsed_stream_df.writeStream \
