@@ -8,6 +8,10 @@ terraform {
       source  = "Snowflake-Labs/snowflake"
       version = "~> 0.86"
     }
+    azurerm = {
+      source  = "hashicorp/azurerm"
+      version = "~> 3.0"
+    }
   }
 
   backend "azurerm" {
@@ -16,4 +20,8 @@ terraform {
     container_name       = "tfstate"
     key                  = "terraform.tfstate"
   }
+}
+
+provider "azurerm" {
+  features {}
 }
