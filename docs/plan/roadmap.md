@@ -32,6 +32,6 @@ This document outlines the step-by-step implementation plan for the telemetry da
 
 ## Phase 5: CI/CD Pipeline (GitHub Actions)
 **Goal:** Automate the deployment of both infrastructure and application code.
-*   [ ] Create `.github/workflows/infra-azure.yml`: Automate Bicep deployments to Azure using OIDC.
-*   [ ] Create `.github/workflows/infra-data.yml`: Automate `terraform plan` and `terraform apply` for Databricks and Snowflake.
-*   [ ] Create `.github/workflows/func-deploy.yml`: Automate the build, test, and deployment of the Azure Function code to the Azure host.
+*   [x] Create `.github/workflows/infra-azure.yml`: Automate Bicep deployments to Azure using OIDC.
+*   [x] Create `.github/workflows/infra-data.yml`: Automate `terraform plan` and `terraform apply` for Databricks and Snowflake.
+*   [x] Create `.github/workflows/func-deploy.yml`: Automate the build, test, and deployment of the Azure Function code to the Azure host.
