@@ -12,8 +12,6 @@ param uniqueSuffix string = uniqueString(resourceGroup().id)
 ])
 param env string
 
-@description('Location specifically for the Function App to bypass regional quota limits.')
-param functionLocation string = 'eastus'
 
 // ==========================================
 // 1. ADLS Gen2 (Data Lake)
@@ -185,24 +183,24 @@ resource functionApp 'Microsoft.Web/sites@2023-12-01' = {
           value: eventHub.name
         }
       ]
-      functionAppConfig: {
-        deployment: {
-          storage: {
-            type: 'blobContainer'
-            value: '${functionStorage.properties.primaryEndpoints.blob}deploymentpackage'
-            authentication: {
-              type: 'SystemAssignedIdentity'
-            }
+    }
+    functionAppConfig: {
+      deployment: {
+        storage: {
+          type: 'blobContainer'
+          value: '${functionStorage.properties.primaryEndpoints.blob}deploymentpackage'
+          authentication: {
+            type: 'SystemAssignedIdentity'
           }
         }
-        scaleAndConcurrency: {
-          maximumInstanceCount: 40
-          instanceMemoryMB: 2048
-        }
-        runtime: {
-          name: 'python'
-          version: '3.11'
-        }
+      }
+      scaleAndConcurrency: {
+        maximumInstanceCount: 40
+        instanceMemoryMB: 2048
+      }
+      runtime: {
+        name: 'python'
+        version: '3.11'
       }
     }
   }
