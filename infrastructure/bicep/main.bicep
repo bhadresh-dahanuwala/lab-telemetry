@@ -78,6 +78,7 @@ resource eventHub 'Microsoft.EventHub/namespaces/eventhubs@2024-01-01' = {
       sizeLimitInBytes: 10485760 // 10 MB
       destination: {
         name: 'EventHubArchive.AzureBlockBlob'
+        identity: { type: 'SystemAssigned' }
         properties: {
           storageAccountResourceId: dataLake.id
           blobContainer: bronzeContainerName
